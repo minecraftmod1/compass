@@ -1,0 +1,22 @@
+
+{
+  "schemaVersion": 1,
+  "id": "compasshud",
+  "version": "${version}",
+  "name": "Compass HUD",
+  "description": "A solid purple compass in the top-left corner that turns with your view. Toggle with F4.",
+  "authors": ["You"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.example.compasshud.CompassHudClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.0",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
