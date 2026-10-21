@@ -11,12 +11,9 @@ public final class CompassRenderer {
     private CompassRenderer() {}
 
     // ======================= EASY SETTINGS =======================
-    // (Position is no longer set here: press F4 in game to move the compass.)
+    // Position and size are set in game: press F4.
 
-    /** Diameter of the compass in GUI pixels. */
-    public static final int SIZE = 65;
-
-    /** Letter size multiplier (1.0 = normal font size, scaled with SIZE/65). */
+    /** Letter size multiplier (1.0 = normal font size, scaled with the compass size). */
     public static final float LETTER_SCALE = 0.9f;
 
     /** Letters orbit at this fraction of the radius. */
@@ -68,37 +65,40 @@ public final class CompassRenderer {
             return;
         }
 
-        CompassTextures.ensure(mc, SIZE);
+        int size = CompassConfig.size;
+
+        CompassTextures.ensure(mc, size);
         int px = CompassTextures.pixelSize();
 
         // Keep the compass fully on screen even if the window got smaller.
-        int left = Math.max(0, Math.min(CompassConfig.x, g.guiWidth() - SIZE));
-        int top = Math.max(0, Math.min(CompassConfig.y, g.guiHeight() - SIZE));
+        int left = Math.max(0, Math.min(CompassConfig.x, g.guiWidth() - size));
+        int top = Math.max(0, Math.min(CompassConfig.y, g.guiHeight() - size));
 
         float yaw = mc.player.getYRot();
-        float radius = SIZE / 2f;
+        float radius = size / 2f;
         float cx = left + radius;
         float cy = top + radius;
 
-        // 1) Solid disk (static, texture is 1:1 with device pixels)
+        // 1) Solid disk. Destination is size x size GUI px; the source is the whole texture
+        //    (px x px), so it is stretched briefly while the size slider is being dragged.
         g.blit(RenderPipelines.GUI_TEXTURED, CompassTextures.diskId(),
-                left, top, 0f, 0f, SIZE, SIZE, px, px, px, px);
+                left, top, 0f, 0f, size, size, px, px, px, px);
 
         // 2) Cross lines, turning with the dial
         g.pose().pushMatrix();
         g.pose().translate(cx, cy);
         g.pose().rotate((float) Math.toRadians(-yaw));
-        g.pose().translate(-SIZE / 2f, -SIZE / 2f);
+        g.pose().translate(-size / 2f, -size / 2f);
         g.blit(RenderPipelines.GUI_TEXTURED, CompassTextures.crossId(),
-                0, 0, 0f, 0f, SIZE, SIZE, px, px, px, px);
+                0, 0, 0f, 0f, size, size, px, px, px, px);
         g.pose().popMatrix();
 
         // 3) Fixed arrow + centre dot (with shadow, baked in the texture)
         g.blit(RenderPipelines.GUI_TEXTURED, CompassTextures.overlayId(),
-                left, top, 0f, 0f, SIZE, SIZE, px, px, px, px);
+                left, top, 0f, 0f, size, size, px, px, px, px);
 
         // 4) Upright letters orbiting the centre
-        float ls = LETTER_SCALE * SIZE / 65f;
+        float ls = LETTER_SCALE * size / 65f;
         float shadow = SHADOW_OFFSET * radius;
         for (int i = 0; i < 4; i++) {
             double a = Math.toRadians(LETTER_YAW[i] - yaw); // clockwise from top
