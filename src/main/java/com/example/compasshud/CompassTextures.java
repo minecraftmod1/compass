@@ -1,4 +1,3 @@
-
 package com.example.compasshud;
 
 import com.mojang.blaze3d.platform.NativeImage;
@@ -8,17 +7,23 @@ import net.minecraft.resources.Identifier;
 
 /**
  * Generates the compass textures in code (no image files).
- * They are rebuilt whenever the GUI scale changes, so the texture is always
- * exactly SIZE * guiScale device pixels and is drawn 1:1. That way the
- * anti-aliased edge is baked in at the exact on-screen resolution and no
- * texture filtering is needed.
+ * They are rebuilt whenever the compass size or GUI scale changes, so the texture is
+ * sizeGui * guiScale device pixels and is drawn 1:1. That way the anti-aliased edge is
+ * baked in at the exact on-screen resolution and no texture filtering is needed.
+ *
+ * While the size is being dragged, rebuilds are limited to one every REBUILD_DELAY_MS;
+ * in between, the old textures are simply stretched by the renderer.
  */
 public final class CompassTextures {
     private CompassTextures() {}
 
     private static final int SS = 4; // supersampling: SS x SS samples per pixel
+    private static final long REBUILD_DELAY_MS = 150;
 
     private static int builtPx = -1;
+    private static int builtSize = -1;
+    private static int builtScale = -1;
+    private static long lastBuildMs = 0;
     private static int generation = 0;
     private static Identifier disk, cross, overlay;
 
@@ -29,16 +34,22 @@ public final class CompassTextures {
 
     public static void ensure(Minecraft mc, int sizeGui) {
         int scale = Math.max(1, (int) Math.round(mc.getWindow().getGuiScale()));
-        int px = sizeGui * scale;
-        if (px == builtPx && disk != null) {
+        if (disk != null && sizeGui == builtSize && scale == builtScale) {
             return;
+        }
+        long now = System.currentTimeMillis();
+        if (disk != null && now - lastBuildMs < REBUILD_DELAY_MS) {
+            return; // keep the old textures for now (stretched), rebuild a moment later
         }
         release(mc);
         generation++;
-        builtPx = px;
-        disk = register(mc, "disk_" + generation, buildDisk(px));
-        cross = register(mc, "cross_" + generation, buildCross(px));
-        overlay = register(mc, "overlay_" + generation, buildOverlay(px));
+        builtSize = sizeGui;
+        builtScale = scale;
+        builtPx = sizeGui * scale;
+        lastBuildMs = now;
+        disk = register(mc, "disk_" + generation, buildDisk(builtPx));
+        cross = register(mc, "cross_" + generation, buildCross(builtPx));
+        overlay = register(mc, "overlay_" + generation, buildOverlay(builtPx));
     }
 
     private static void release(Minecraft mc) {
