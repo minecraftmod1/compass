@@ -1,4 +1,3 @@
-
 package com.example.compasshud;
 
 import net.minecraft.ChatFormatting;
@@ -12,12 +11,10 @@ public final class CompassRenderer {
     private CompassRenderer() {}
 
     // ======================= EASY SETTINGS =======================
+    // (Position is no longer set here: press F4 in game to move the compass.)
 
     /** Diameter of the compass in GUI pixels. */
     public static final int SIZE = 65;
-
-    /** Distance from the top-left screen corner, in GUI pixels. */
-    public static final int MARGIN = 6;
 
     /** Letter size multiplier (1.0 = normal font size, scaled with SIZE/65). */
     public static final float LETTER_SCALE = 0.9f;
@@ -67,21 +64,25 @@ public final class CompassRenderer {
 
     public static void render(GuiGraphics g, DeltaTracker deltaTracker) {
         Minecraft mc = Minecraft.getInstance();
-        if (!CompassHudClient.enabled || mc.player == null || mc.options.hideGui) {
+        if (!CompassConfig.enabled || mc.player == null || mc.options.hideGui) {
             return;
         }
 
         CompassTextures.ensure(mc, SIZE);
         int px = CompassTextures.pixelSize();
 
+        // Keep the compass fully on screen even if the window got smaller.
+        int left = Math.max(0, Math.min(CompassConfig.x, g.guiWidth() - SIZE));
+        int top = Math.max(0, Math.min(CompassConfig.y, g.guiHeight() - SIZE));
+
         float yaw = mc.player.getYRot();
         float radius = SIZE / 2f;
-        float cx = MARGIN + radius;
-        float cy = MARGIN + radius;
+        float cx = left + radius;
+        float cy = top + radius;
 
         // 1) Solid disk (static, texture is 1:1 with device pixels)
         g.blit(RenderPipelines.GUI_TEXTURED, CompassTextures.diskId(),
-                MARGIN, MARGIN, 0f, 0f, SIZE, SIZE, px, px, px, px);
+                left, top, 0f, 0f, SIZE, SIZE, px, px, px, px);
 
         // 2) Cross lines, turning with the dial
         g.pose().pushMatrix();
@@ -94,7 +95,7 @@ public final class CompassRenderer {
 
         // 3) Fixed arrow + centre dot (with shadow, baked in the texture)
         g.blit(RenderPipelines.GUI_TEXTURED, CompassTextures.overlayId(),
-                MARGIN, MARGIN, 0f, 0f, SIZE, SIZE, px, px, px, px);
+                left, top, 0f, 0f, SIZE, SIZE, px, px, px, px);
 
         // 4) Upright letters orbiting the centre
         float ls = LETTER_SCALE * SIZE / 65f;
