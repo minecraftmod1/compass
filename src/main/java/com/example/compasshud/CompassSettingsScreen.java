@@ -6,12 +6,14 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-/** Opened with F4: toggle the compass and move it with the X / Y sliders. */
+/** Opened with F4: toggle the compass, change its size and move it with sliders. */
 public class CompassSettingsScreen extends Screen {
+    private enum Kind { SIZE, X, Y }
+
     private final Screen parent;
-    private Button toggleButton;
-    private PositionSlider sliderX;
-    private PositionSlider sliderY;
+    private ConfigSlider sliderSize;
+    private ConfigSlider sliderX;
+    private ConfigSlider sliderY;
     private int panelTop;
 
     public CompassSettingsScreen(Screen parent) {
@@ -19,12 +21,14 @@ public class CompassSettingsScreen extends Screen {
         this.parent = parent;
     }
 
-    private int maxX() {
-        return Math.max(1, this.width - CompassRenderer.SIZE);
+    /** Furthest right the compass can be placed at its current size. */
+    private int maxPosX() {
+        return Math.max(1, this.width - CompassConfig.size);
     }
 
-    private int maxY() {
-        return Math.max(1, this.height - CompassRenderer.SIZE);
+    /** Furthest down the compass can be placed at its current size. */
+    private int maxPosY() {
+        return Math.max(1, this.height - CompassConfig.size);
     }
 
     private static Component toggleLabel() {
@@ -35,24 +39,29 @@ public class CompassSettingsScreen extends Screen {
     protected void init() {
         int w = 200;
         int left = this.width / 2 - w / 2;
-        panelTop = this.height / 2 - 48;
+        panelTop = this.height / 2 - 60;
         int y = panelTop;
 
-        toggleButton = this.addRenderableWidget(Button.builder(toggleLabel(), button -> {
+        this.addRenderableWidget(Button.builder(toggleLabel(), button -> {
             CompassConfig.enabled = !CompassConfig.enabled;
             button.setMessage(toggleLabel());
         }).bounds(left, y, w, 20).build());
         y += 24;
 
-        sliderX = this.addRenderableWidget(new PositionSlider(left, y, w, 20, true));
+        sliderSize = this.addRenderableWidget(new ConfigSlider(left, y, w, 20, Kind.SIZE));
         y += 24;
 
-        sliderY = this.addRenderableWidget(new PositionSlider(left, y, w, 20, false));
+        sliderX = this.addRenderableWidget(new ConfigSlider(left, y, w, 20, Kind.X));
         y += 24;
 
-        this.addRenderableWidget(Button.builder(Component.literal("Reset position"), button -> {
+        sliderY = this.addRenderableWidget(new ConfigSlider(left, y, w, 20, Kind.Y));
+        y += 24;
+
+        this.addRenderableWidget(Button.builder(Component.literal("Reset"), button -> {
+            CompassConfig.size = CompassConfig.DEFAULT_SIZE;
             CompassConfig.x = CompassConfig.DEFAULT_X;
             CompassConfig.y = CompassConfig.DEFAULT_Y;
+            sliderSize.syncFromConfig();
             sliderX.syncFromConfig();
             sliderY.syncFromConfig();
         }).bounds(left, y, 98, 20).build());
@@ -61,7 +70,7 @@ public class CompassSettingsScreen extends Screen {
                 .bounds(left + 102, y, 98, 20).build());
     }
 
-    /** No blur or dimming, so you can see the compass clearly while moving it. */
+    /** No blur or dimming, so you can see the compass clearly while adjusting it. */
     @Override
     public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
     }
@@ -83,41 +92,74 @@ public class CompassSettingsScreen extends Screen {
         CompassConfig.save();
     }
 
-    /** Slider that sets the compass X or Y position in whole GUI pixels. */
-    private final class PositionSlider extends AbstractSliderButton {
-        private final boolean horizontal;
+    /** One slider class for size, X position and Y position (all in whole GUI pixels). */
+    private final class ConfigSlider extends AbstractSliderButton {
+        private final Kind kind;
 
-        PositionSlider(int x, int y, int w, int h, boolean horizontal) {
+        ConfigSlider(int x, int y, int w, int h, Kind kind) {
             super(x, y, w, h, Component.empty(), 0.0);
-            this.horizontal = horizontal;
+            this.kind = kind;
             syncFromConfig();
         }
 
-        private int max() {
-            return horizontal ? maxX() : maxY();
+        private int rangeMin() {
+            return kind == Kind.SIZE ? CompassConfig.MIN_SIZE : 0;
         }
 
-        private int current() {
-            return (int) Math.round(this.value * max());
+        private int rangeMax() {
+            return switch (kind) {
+                case SIZE -> CompassConfig.MAX_SIZE;
+                case X -> maxPosX();
+                case Y -> maxPosY();
+            };
+        }
+
+        private int currentValue() {
+            return rangeMin() + (int) Math.round(this.value * (rangeMax() - rangeMin()));
         }
 
         void syncFromConfig() {
-            int pos = horizontal ? CompassConfig.x : CompassConfig.y;
-            this.value = Math.max(0.0, Math.min(1.0, pos / (double) max()));
+            int pos = switch (kind) {
+                case SIZE -> CompassConfig.size;
+                case X -> CompassConfig.x;
+                case Y -> CompassConfig.y;
+            };
+            int range = Math.max(1, rangeMax() - rangeMin());
+            this.value = Math.max(0.0, Math.min(1.0, (pos - rangeMin()) / (double) range));
             updateMessage();
         }
 
         @Override
         protected void updateMessage() {
-            this.setMessage(Component.literal((horizontal ? "X position: " : "Y position: ") + current()));
+            if (this.kind == null) {
+                return;
+            }
+            String label = switch (kind) {
+                case SIZE -> "Size: ";
+                case X -> "X position: ";
+                case Y -> "Y position: ";
+            };
+            this.setMessage(Component.literal(label + currentValue()));
         }
 
         @Override
         protected void applyValue() {
-            if (horizontal) {
-                CompassConfig.x = current();
-            } else {
-                CompassConfig.y = current();
+            int v = currentValue();
+            switch (kind) {
+                case SIZE -> {
+                    CompassConfig.size = v;
+                    // A bigger compass has less room: keep it fully on screen.
+                    CompassConfig.x = Math.min(CompassConfig.x, maxPosX());
+                    CompassConfig.y = Math.min(CompassConfig.y, maxPosY());
+                    if (sliderX != null) {
+                        sliderX.syncFromConfig();
+                    }
+                    if (sliderY != null) {
+                        sliderY.syncFromConfig();
+                    }
+                }
+                case X -> CompassConfig.x = v;
+                case Y -> CompassConfig.y = v;
             }
         }
     }
